@@ -1,4 +1,4 @@
-# diabetes-data-preparation
+
 # Diabetes Prediction Data Preparation Project
 
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
@@ -118,5 +118,6 @@ diabetes-data-preparation/
 ```bash
 Python 3.8+
 Jupyter Notebook
+
 
 

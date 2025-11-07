@@ -1,4 +1,11 @@
 # diabetes-data-preparation
+# Diabetes Prediction Data Preparation Project
+
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
+![Scikit-learn](https://img.shields.io/badge/Scikit--learn-1.3%2B-orange)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Status](https://img.shields.io/badge/Status-Completed-success)
+![GitHub](https://img.shields.io/badge/GitHub-Repository-lightgrey)
 "Comprehensive medical data preparation pipeline for diabetes prediction with clinical validation and feature engineering"
 # Diabetes Prediction Data Preparation Project
 
@@ -116,3 +123,4 @@ diabetes-data-preparation/
 ```bash
 Python 3.8+
 Jupyter Notebook
+

@@ -6,12 +6,7 @@
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Status](https://img.shields.io/badge/Status-Completed-success)
 ![GitHub](https://img.shields.io/badge/GitHub-Repository-lightgrey)
-"Comprehensive medical data preparation pipeline for diabetes prediction with clinical validation and feature engineering"
-# Diabetes Prediction Data Preparation Project
 
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
-![Status](https://img.shields.io/badge/Status-Completed-success)
 
 A comprehensive medical data preparation pipeline for diabetes prediction, transforming raw healthcare data into machine-learning ready datasets with clinical validation and optimal feature engineering.
 
@@ -123,4 +118,5 @@ diabetes-data-preparation/
 ```bash
 Python 3.8+
 Jupyter Notebook
+
 

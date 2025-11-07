@@ -1,4 +1,4 @@
-# File: src/data_reduction.py
+# File: src/data_reduction.py (UPDATED VERSION)
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,7 +6,7 @@ import seaborn as sns
 from sklearn.feature_selection import SelectKBest, mutual_info_classif, f_classif, RFE
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.linear_model import LogisticRegression
 import warnings
 warnings.filterwarnings('ignore')
@@ -21,6 +21,14 @@ class DiabetesDataReducer:
         self.X = self.df.drop(columns=[target_col])
         self.y = self.df[target_col]
         
+        # Prepare numerical features only for correlation analysis
+        self.numerical_features = self.X.select_dtypes(include=[np.number]).columns.tolist()
+        self.categorical_features = self.X.select_dtypes(include=['object', 'category']).columns.tolist()
+        
+        print(f"📊 Feature Types Identified:")
+        print(f"  - Numerical features: {len(self.numerical_features)}")
+        print(f"  - Categorical features: {len(self.categorical_features)}")
+    
     def get_feature_categories(self):
         """Categorize features for better analysis"""
         feature_categories = {
@@ -35,12 +43,13 @@ class DiabetesDataReducer:
         return feature_categories
     
     def analyze_feature_correlations(self):
-        """Comprehensive correlation analysis"""
-        print("🔗 COMPREHENSIVE FEATURE CORRELATION ANALYSIS")
+        """Comprehensive correlation analysis - NUMERICAL FEATURES ONLY"""
+        print("🔗 COMPREHENSIVE FEATURE CORRELATION ANALYSIS (Numerical Features Only)")
         print("=" * 50)
         
-        # Calculate correlation matrix
-        corr_matrix = self.X.corr()
+        # Use only numerical features for correlation
+        X_numerical = self.X[self.numerical_features]
+        corr_matrix = X_numerical.corr()
         
         # Find highly correlated features (absolute correlation > 0.8)
         high_corr_pairs = []
@@ -60,31 +69,34 @@ class DiabetesDataReducer:
         else:
             print("  - No highly correlated feature pairs found")
         
-        # Correlation with target
+        # Correlation with target (numerical features only)
         target_correlations = {}
-        for col in self.X.columns:
-            if col != self.target_col:
-                corr = np.corrcoef(self.X[col], self.y)[0, 1]
-                target_correlations[col] = corr
+        for col in X_numerical.columns:
+            corr = np.corrcoef(X_numerical[col], self.y)[0, 1]
+            target_correlations[col] = corr
         
         # Sort by absolute correlation with target
         sorted_correlations = sorted(target_correlations.items(), 
                                    key=lambda x: abs(x[1]), reverse=True)
         
-        print("\n📊 TOP FEATURES BY CORRELATION WITH TARGET:")
+        print("\n📊 TOP NUMERICAL FEATURES BY CORRELATION WITH TARGET:")
         for feature, corr in sorted_correlations[:10]:
             print(f"  - {feature}: {corr:.3f}")
         
-        # Visualization
-        plt.figure(figsize=(15, 12))
+        # Visualization - Numerical features only
+        plt.figure(figsize=(12, 10))
         
-        # Top correlations heatmap
-        top_features = [feat for feat, _ in sorted_correlations[:15]] + [self.target_col]
-        top_corr_matrix = self.df[top_features].corr()
+        # Top correlations heatmap (numerical features only)
+        top_features = [feat for feat, _ in sorted_correlations[:15]] 
+        if self.target_col in self.df.columns:
+            # Include target in correlation matrix if available
+            top_corr_matrix = self.df[top_features + [self.target_col]].corr()
+        else:
+            top_corr_matrix = self.df[top_features].corr()
         
         sns.heatmap(top_corr_matrix, annot=True, cmap='coolwarm', center=0,
                    square=True, linewidths=0.5, fmt='.2f')
-        plt.title('Top Feature Correlations with Diabetes Outcome', 
+        plt.title('Top Numerical Features Correlation with Diabetes Outcome', 
                  fontsize=14, fontweight='bold')
         plt.tight_layout()
         plt.show()
@@ -97,18 +109,40 @@ class DiabetesDataReducer:
         
         return high_corr_pairs, dict(sorted_correlations)
     
+    def prepare_features_for_analysis(self):
+        """Prepare all features for feature selection (handle categorical)"""
+        print("\n🔄 PREPARING FEATURES FOR ANALYSIS")
+        print("=" * 50)
+        
+        # Start with numerical features
+        X_processed = self.X[self.numerical_features].copy()
+        
+        # Handle categorical features by encoding them
+        if self.categorical_features:
+            print("Encoding categorical features for analysis:")
+            for cat_feature in self.categorical_features:
+                if cat_feature in self.X.columns:
+                    # Use label encoding for categorical features
+                    le = LabelEncoder()
+                    encoded_values = le.fit_transform(self.X[cat_feature].astype(str))
+                    X_processed[f"{cat_feature}_Encoded"] = encoded_values
+                    print(f"  - {cat_feature} → {cat_feature}_Encoded")
+        
+        print(f"Final feature set for analysis: {X_processed.shape[1]} features")
+        return X_processed
+    
     def mutual_information_analysis(self):
         """Feature selection using Mutual Information"""
         print("\n🎯 MUTUAL INFORMATION FEATURE SELECTION")
         print("=" * 50)
         
-        # Prepare data (handle categorical if needed)
-        X_numeric = self.X.select_dtypes(include=[np.number])
+        # Prepare all features (numerical + encoded categorical)
+        X_processed = self.prepare_features_for_analysis()
         
         # Calculate mutual information
-        mi_scores = mutual_info_classif(X_numeric, self.y, random_state=42)
+        mi_scores = mutual_info_classif(X_processed, self.y, random_state=42)
         mi_features = pd.DataFrame({
-            'feature': X_numeric.columns,
+            'feature': X_processed.columns,
             'mi_score': mi_scores
         }).sort_values('mi_score', ascending=False)
         
@@ -134,14 +168,14 @@ class DiabetesDataReducer:
         print(f"\n🏆 SELECTKBEST FEATURE SELECTION (Top {k} Features)")
         print("=" * 50)
         
-        X_numeric = self.X.select_dtypes(include=[np.number])
+        X_processed = self.prepare_features_for_analysis()
         
         # Use f_classif for classification
-        selector = SelectKBest(score_func=f_classif, k=k)
-        selector.fit(X_numeric, self.y)
+        selector = SelectKBest(score_func=f_classif, k=min(k, X_processed.shape[1]))
+        selector.fit(X_processed, self.y)
         
         kbest_scores = pd.DataFrame({
-            'feature': X_numeric.columns,
+            'feature': X_processed.columns,
             'f_score': selector.scores_,
             'p_value': selector.pvalues_
         }).sort_values('f_score', ascending=False)
@@ -158,13 +192,13 @@ class DiabetesDataReducer:
         print("\n🌲 RANDOM FOREST FEATURE IMPORTANCE")
         print("=" * 50)
         
-        X_numeric = self.X.select_dtypes(include=[np.number])
+        X_processed = self.prepare_features_for_analysis()
         
         rf = RandomForestClassifier(n_estimators=100, random_state=42)
-        rf.fit(X_numeric, self.y)
+        rf.fit(X_processed, self.y)
         
         feature_importance = pd.DataFrame({
-            'feature': X_numeric.columns,
+            'feature': X_processed.columns,
             'importance': rf.feature_importances_
         }).sort_values('importance', ascending=False)
         
@@ -190,15 +224,16 @@ class DiabetesDataReducer:
         print(f"\n🔄 RECURSIVE FEATURE ELIMINATION (Top {n_features} Features)")
         print("=" * 50)
         
-        X_numeric = self.X.select_dtypes(include=[np.number])
+        X_processed = self.prepare_features_for_analysis()
         
         # Use logistic regression as estimator
         estimator = LogisticRegression(random_state=42, max_iter=1000)
-        selector = RFE(estimator, n_features_to_select=n_features)
-        selector.fit(X_numeric, self.y)
+        n_features_to_select = min(n_features, X_processed.shape[1])
+        selector = RFE(estimator, n_features_to_select=n_features_to_select)
+        selector.fit(X_processed, self.y)
         
         rfe_ranking = pd.DataFrame({
-            'feature': X_numeric.columns,
+            'feature': X_processed.columns,
             'rfe_ranking': selector.ranking_,
             'selected': selector.support_
         }).sort_values('rfe_ranking')
@@ -212,12 +247,16 @@ class DiabetesDataReducer:
         return rfe_ranking
     
     def pca_analysis(self):
-        """Principal Component Analysis for dimensionality reduction"""
-        print("\n🔍 PRINCIPAL COMPONENT ANALYSIS (PCA)")
+        """Principal Component Analysis for dimensionality reduction - NUMERICAL FEATURES ONLY"""
+        print("\n🔍 PRINCIPAL COMPONENT ANALYSIS (PCA) - Numerical Features Only")
         print("=" * 50)
         
-        # Use only scaled features for PCA
-        scaled_features = [col for col in self.X.columns if '_Scaled' in col]
+        # Use only scaled numerical features for PCA
+        scaled_features = [col for col in self.numerical_features if '_Scaled' in col]
+        if not scaled_features:
+            # If no scaled features, use original numerical features
+            scaled_features = [col for col in self.numerical_features if col not in ['Outcome', 'Class']]
+        
         X_scaled = self.X[scaled_features]
         
         # Perform PCA
@@ -329,11 +368,13 @@ class DiabetesDataReducer:
         methods = ['mutual_information', 'random_forest', 'selectkbest']
         for method in methods:
             df = self.reduction_report[method]
-            max_score = df.iloc[0][['mi_score', 'importance', 'f_score'][methods.index(method)]]
+            # Get the score column name
+            score_column = ['mi_score', 'importance', 'f_score'][methods.index(method)]
+            max_score = df[score_column].max()
             
             for _, row in df.iterrows():
                 feature = row['feature']
-                score = row[['mi_score', 'importance', 'f_score'][methods.index(method)]]
+                score = row[score_column]
                 normalized_score = score / max_score
                 
                 if feature not in feature_scores:
@@ -352,19 +393,35 @@ class DiabetesDataReducer:
             print(f"  - {feature}: {score:.3f}")
             final_features.append(feature)
         
-        # Create reduced dataset
-        reduced_df = self.df[final_features + [self.target_col]]
+        # Create reduced dataset - use original feature names (not encoded versions)
+        original_feature_names = []
+        for feature in final_features:
+            # Convert encoded names back to original if possible
+            if feature.endswith('_Encoded'):
+                original_name = feature.replace('_Encoded', '')
+                if original_name in self.df.columns:
+                    original_feature_names.append(original_name)
+                else:
+                    original_feature_names.append(feature)
+            else:
+                original_feature_names.append(feature)
+        
+        # Ensure we have unique features
+        original_feature_names = list(set(original_feature_names))
+        
+        # Create final dataset with selected features
+        reduced_df = self.df[original_feature_names + [self.target_col]]
         
         print(f"\n📉 DATASET REDUCTION: {self.df.shape[1]} → {reduced_df.shape[1]} features")
-        print(f"📊 FEATURE REDUCTION: {len(self.X.columns)} → {len(final_features)} predictors")
+        print(f"📊 FEATURE REDUCTION: {len(self.X.columns)} → {len(original_feature_names)} predictors")
         
         self.reduction_report['final_selection'] = {
-            'selected_features': final_features,
+            'selected_features': original_feature_names,
             'feature_scores': avg_scores,
             'reduced_dataset': reduced_df
         }
         
-        return reduced_df, final_features
+        return reduced_df, original_feature_names
     
     def generate_reduction_summary(self):
         """Generate comprehensive reduction summary report"""
@@ -372,7 +429,7 @@ class DiabetesDataReducer:
         print("=" * 60)
         
         print("🚀 REDUCTION OPERATIONS PERFORMED:")
-        print("• Comprehensive correlation analysis")
+        print("• Comprehensive correlation analysis (numerical features)")
         print("• Mutual information feature selection")
         print("• SelectKBest (ANOVA) analysis")
         print("• Random Forest feature importance")
@@ -400,7 +457,7 @@ class DiabetesDataReducer:
         
         return self.reduction_report
 
-# Usage function
+# Usage function (unchanged)
 def execute_data_reduction_pipeline(df, target_col='Outcome', n_final_features=15):
     """Execute complete data reduction pipeline"""
     reducer = DiabetesDataReducer(df, target_col)
